@@ -4,67 +4,71 @@ import (
 	"crypto/rand"
 	"fmt"
 	"math/big"
-	"strings"
 )
 
-// RandID represents a random ID generator
+// RandID generates IDs like XXXX-XXXX-XXXX-XXXX.
 type RandID struct {
-	letters string
-	digits  string
-	parts   int
-	partLen int
+	letters []rune
+	digits  []rune
 }
 
-// NewRandID creates a new RandID generator
+// Initialize character sets.
 func NewRandID() *RandID {
+	letters := "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	digits := "0123456789"
+
 	return &RandID{
-		letters: "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
-		digits:  "0123456789",
-		parts:   4,
-		partLen: 4,
+		letters: []rune(letters),
+		digits:  []rune(digits),
 	}
 }
 
-// Generate produces a random ID in the format XXXX-XXXX-XXXX-XXXX
+// Generate full ID of 4 groups.
 func (r *RandID) Generate() string {
-	parts := make([]string, r.parts)
-	for i := 0; i < r.parts; i++ {
-		parts[i] = r.randomPart()
+	parts := make([]string, 4)
+	for i := 0; i < 4; i++ {
+		parts[i] = r.buildGroup()
 	}
-	return strings.Join(parts, "-")
+	return fmt.Sprintf("%s-%s-%s-%s", parts[0], parts[1], parts[2], parts[3])
 }
 
-// randomPart generates a part of the ID alternating letters and digits
-func (r *RandID) randomPart() string {
-	firstIsDigit := r.randomBool()
-	var part strings.Builder
-	useDigit := firstIsDigit
-	for i := 0; i < r.partLen; i++ {
-		if useDigit {
-			part.WriteRune(r.randomRune(r.digits))
+// Build one 4-char group (2 letters, 2 digits, alternating).
+func (r *RandID) buildGroup() string {
+	startWithLetter := r.randInt(2) == 0
+	out := make([]rune, 4)
+
+	for i := 0; i < 4; i++ {
+		if (i%2 == 0 && startWithLetter) || (i%2 == 1 && !startWithLetter) {
+			out[i] = r.randomLetter()
 		} else {
-			part.WriteRune(r.randomRune(r.letters))
+			out[i] = r.randomDigit()
 		}
-		useDigit = !useDigit
 	}
-	return part.String()
+	return string(out)
 }
 
-// randomRune selects a random character from a string
-func (r *RandID) randomRune(s string) rune {
-	n, _ := rand.Int(rand.Reader, big.NewInt(int64(len(s))))
-	return rune(s[n.Int64()])
+// Pick random letter.
+func (r *RandID) randomLetter() rune {
+	return r.letters[r.randInt(len(r.letters))]
 }
 
-// randomBool returns a random boolean
-func (r *RandID) randomBool() bool {
-	n, _ := rand.Int(rand.Reader, big.NewInt(2))
-	return n.Int64() == 0
+// Pick random digit.
+func (r *RandID) randomDigit() rune {
+	return r.digits[r.randInt(len(r.digits))]
+}
+
+// Secure random int [0, n).
+func (r *RandID) randInt(n int) int {
+	v, err := rand.Int(rand.Reader, big.NewInt(int64(n)))
+	if err != nil {
+		return 0
+	}
+	return int(v.Int64())
 }
 
 func main() {
-	rid := NewRandID()
+	r := NewRandID()
 	for i := 0; i < 10; i++ {
-		fmt.Println(rid.Generate())
+		fmt.Println(r.Generate())
 	}
 }
