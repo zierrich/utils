@@ -6,126 +6,147 @@ import (
 	"math/big"
 )
 
-// RandPass struct represents the random password generator
 type RandPass struct {
-	lettersUpper string
-	lettersLower string
+	lowerLetters string
+	upperLetters string
 	digits       string
 	specials     string
-
-	lettersCount  int
-	digitsCount   int
-	specialsCount int
+	passwordLen  int
 }
 
-// NewRandPass is the constructor for RandPass
-func NewRandPass(lettersCount, digitsCount, specialsCount int) *RandPass {
+func NewRandPass() *RandPass {
 	return &RandPass{
-		lettersUpper:  "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
-		lettersLower:  "abcdefghijklmnopqrstuvwxyz",
-		digits:        "0123456789",
-		specials:      "!@#$%^&*?",
-		lettersCount:  lettersCount,
-		digitsCount:   digitsCount,
-		specialsCount: specialsCount,
+		lowerLetters: "abcdefghijklmnopqrstuvwxyz",
+		upperLetters: "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+		digits:       "0123456789",
+		specials:     "!@#$%^&*?",
+		passwordLen:  16,
 	}
 }
 
-// randomChar selects a random character from the given string
-func (rp *RandPass) randomChar(chars string) rune {
-	n, _ := rand.Int(rand.Reader, big.NewInt(int64(len(chars))))
-	return rune(chars[n.Int64()])
-}
-
-// randInt returns a random integer in [0,max)
-func (rp *RandPass) randInt(max int) int {
-	n, _ := rand.Int(rand.Reader, big.NewInt(int64(max)))
-	return int(n.Int64())
-}
-
-// isDigitOrSpecial checks if a rune is a digit or a special character
-func (rp *RandPass) isDigitOrSpecial(r rune) bool {
-	for _, c := range rp.digits + rp.specials {
-		if r == c {
-			return true
-		}
-	}
-	return false
-}
-
-// isSpecial checks if a rune is a special character
-func (rp *RandPass) isSpecial(r rune) bool {
-	for _, c := range rp.specials {
-		if r == c {
-			return true
-		}
-	}
-	return false
-}
-
-// Generate creates a single password following all rules
+// Generate builds one password following all rules
 func (rp *RandPass) Generate() string {
-	passwordLength := rp.lettersCount + rp.digitsCount + rp.specialsCount
-	password := make([]rune, 0, passwordLength)
-	lettersUsed, digitsUsed, specialsUsed := 0, 0, 0
+	letters := rp.pickLetters(10)
+	digs := rp.pickDigits(4)
+	specs := rp.pickSpecials(2)
 
-	for len(password) < passwordLength {
-		lastIsExtra := len(password) > 0 && rp.isDigitOrSpecial(password[len(password)-1])
+	all := append(letters, digs...)
+	all = append(all, specs...)
 
-		canLetter := lettersUsed < rp.lettersCount
-		canDigit := digitsUsed < rp.digitsCount && !lastIsExtra
-		canSpecial := specialsUsed < rp.specialsCount && !lastIsExtra && len(password) != 0 && len(password) != passwordLength-1
+	shuffled := rp.shuffle(all)
+	return string(shuffled)
+}
 
-		options := []string{}
-		// Первый символ всегда буква
-		if len(password) == 0 && canLetter {
-			options = append(options, "letter")
-		} else if len(password) == passwordLength-1 && canLetter {
-			// Последний символ всегда буква
-			options = append(options, "letter")
+// pickLetters returns 10 letters alternating case
+func (rp *RandPass) pickLetters(n int) []rune {
+	out := make([]rune, 0, n)
+	for i := 0; i < n; i++ {
+		if i%2 == 0 {
+			out = append(out, rp.randChar(rp.lowerLetters))
 		} else {
-			if canLetter {
-				options = append(options, "letter")
-			}
-			if canDigit {
-				options = append(options, "digit")
-			}
-			if canSpecial {
-				options = append(options, "special")
-			}
+			out = append(out, rp.randChar(rp.upperLetters))
 		}
+	}
+	return out
+}
 
-		if len(options) == 0 {
-			options = append(options, "letter")
+// pickDigits returns required digits
+func (rp *RandPass) pickDigits(n int) []rune {
+	out := make([]rune, n)
+	for i := 0; i < n; i++ {
+		out[i] = rp.randChar(rp.digits)
+	}
+	return out
+}
+
+// pickSpecials returns required special characters
+func (rp *RandPass) pickSpecials(n int) []rune {
+	out := make([]rune, n)
+	for i := 0; i < n; i++ {
+		out[i] = rp.randChar(rp.specials)
+	}
+	return out
+}
+
+// randChar selects a cryptographically safe random rune
+func (rp *RandPass) randChar(chars string) rune {
+	i, _ := rand.Int(rand.Reader, big.NewInt(int64(len(chars))))
+	return rune(chars[i.Int64()])
+}
+
+// shuffle randomly shuffles until rules are satisfied
+func (rp *RandPass) shuffle(chars []rune) []rune {
+	for {
+		rp.cryptoShuffle(chars)
+		if rp.isValid(chars) {
+			return chars
 		}
+	}
+}
 
-		typ := options[rp.randInt(len(options))]
+// cryptoShuffle performs Fisher–Yates using crypto/rand
+func (rp *RandPass) cryptoShuffle(s []rune) {
+	for i := len(s) - 1; i > 0; i-- {
+		jb, _ := rand.Int(rand.Reader, big.NewInt(int64(i+1)))
+		j := int(jb.Int64())
+		s[i], s[j] = s[j], s[i]
+	}
+}
 
-		var next rune
-		switch typ {
-		case "letter":
-			if lettersUsed%2 == 0 {
-				next = rp.randomChar(rp.lettersUpper)
-			} else {
-				next = rp.randomChar(rp.lettersLower)
-			}
-			lettersUsed++
-		case "digit":
-			next = rp.randomChar(rp.digits)
-			digitsUsed++
-		case "special":
-			next = rp.randomChar(rp.specials)
-			specialsUsed++
-		}
-
-		password = append(password, next)
+// isValid checks all password constraints
+func (rp *RandPass) isValid(p []rune) bool {
+	if rp.isSpecial(p[0]) {
+		return false
 	}
 
-	return string(password)
+	letters := 0
+	digs := 0
+	specs := 0
+
+	for _, ch := range p {
+		switch {
+		case rp.isLetter(ch):
+			letters++
+			digs, specs = 0, 0
+			if letters > 2 {
+				return false
+			}
+		case rp.isDigit(ch):
+			digs++
+			letters, specs = 0, 0
+			if digs > 1 {
+				return false
+			}
+		case rp.isSpecial(ch):
+			specs++
+			letters, digs = 0, 0
+			if specs > 1 {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func (rp *RandPass) isLetter(ch rune) bool {
+	return ('a' <= ch && ch <= 'z') || ('A' <= ch && ch <= 'Z')
+}
+
+func (rp *RandPass) isDigit(ch rune) bool {
+	return '0' <= ch && ch <= '9'
+}
+
+func (rp *RandPass) isSpecial(ch rune) bool {
+	for _, s := range rp.specials {
+		if ch == s {
+			return true
+		}
+	}
+	return false
 }
 
 func main() {
-	rp := NewRandPass(10, 4, 2) // 10 letters, 4 digits, 2 special characters
+	rp := NewRandPass()
 	for i := 0; i < 10; i++ {
 		fmt.Println(rp.Generate())
 	}
