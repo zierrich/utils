@@ -77,14 +77,22 @@ func (rp *RandPass) Generate() string {
 		canSpecial := specialsUsed < rp.specialsCount && !lastIsExtra && len(password) != 0 && len(password) != passwordLength-1
 
 		options := []string{}
-		if canLetter {
+		// Первый символ всегда буква
+		if len(password) == 0 && canLetter {
 			options = append(options, "letter")
-		}
-		if canDigit {
-			options = append(options, "digit")
-		}
-		if canSpecial {
-			options = append(options, "special")
+		} else if len(password) == passwordLength-1 && canLetter {
+			// Последний символ всегда буква
+			options = append(options, "letter")
+		} else {
+			if canLetter {
+				options = append(options, "letter")
+			}
+			if canDigit {
+				options = append(options, "digit")
+			}
+			if canSpecial {
+				options = append(options, "special")
+			}
 		}
 
 		if len(options) == 0 {
